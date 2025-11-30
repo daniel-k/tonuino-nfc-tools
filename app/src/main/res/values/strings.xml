@@ -25,6 +25,7 @@
     <string name="main_usb_headline">USB storage</string>
     <string name="main_usb_description">Connect a USB thumb drive or SD card reader and let the app list its files.</string>
     <string name="main_usb_button">List files on USB drive</string>
+    <string name="main_usb_pick_other_button">Choose different location</string>
     <string name="main_usb_not_found">No removable storage detected. Connect a USB drive or card reader or pick a location manually.</string>
     <string name="main_usb_picker_cancelled">Selection was cancelled. No files read.</string>
     <string name="main_usb_missing_uri">No location was returned by the system.</string>

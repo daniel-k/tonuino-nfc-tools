@@ -73,15 +73,26 @@ class MainActivity : NfcIntentActivity() {
     }
 
     fun listUsbFiles(@Suppress("UNUSED_PARAMETER") view: View) {
+        startUsbFlow(usePersistedUri = true)
+    }
+
+    fun pickUsbLocation(@Suppress("UNUSED_PARAMETER") view: View) {
+        startUsbFlow(usePersistedUri = false)
+    }
+
+    private fun startUsbFlow(usePersistedUri: Boolean) {
         val statusView = findViewById<TextView>(R.id.usb_result_text)
 
-        val persistedUri = usbPermissionStore.getPersistedUriIfReadable(contentResolver)
-        if (persistedUri != null) {
-            statusView.text = getString(R.string.main_usb_using_saved_access)
-            proceedWithUsbUri(persistedUri, statusView, rememberSelection = false)
-            return
-        } else if (usbPermissionStore.hasSavedUri()) {
-            statusView.text = getString(R.string.main_usb_saved_access_invalid)
+        val persistedUri =
+            if (usePersistedUri) usbPermissionStore.getPersistedUriIfReadable(contentResolver) else null
+        if (usePersistedUri) {
+            if (persistedUri != null) {
+                statusView.text = getString(R.string.main_usb_using_saved_access)
+                proceedWithUsbUri(persistedUri, statusView, rememberSelection = false)
+                return
+            } else if (usbPermissionStore.hasSavedUri()) {
+                statusView.text = getString(R.string.main_usb_saved_access_invalid)
+            }
         }
 
         val storageManager = getSystemService(StorageManager::class.java)
