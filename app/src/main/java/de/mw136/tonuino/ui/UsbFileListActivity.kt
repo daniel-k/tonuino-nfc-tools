@@ -1,11 +1,16 @@
 package de.mw136.tonuino.ui
 
+import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.TableLayout
 import android.widget.TableRow
 import android.widget.TextView
@@ -15,6 +20,8 @@ import de.mw136.tonuino.R
 import de.mw136.tonuino.nfc.NfcIntentActivity
 import de.mw136.tonuino.ui.enter.TagData
 import java.util.Locale
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import kotlin.ExperimentalUnsignedTypes
 import kotlin.math.roundToInt
 
@@ -22,6 +29,12 @@ import kotlin.math.roundToInt
 class UsbFileListActivity : AppCompatActivity() {
     private val hiddenTopLevelFolderNames = setOf("advert", "mp3", "lost.dir")
     private val selectableFolderRange = 1..99
+    private val scanExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private var progressDialog: AlertDialog? = null
+    private var progressBar: ProgressBar? = null
+    private var progressText: TextView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,7 +45,6 @@ class UsbFileListActivity : AppCompatActivity() {
 
         val statusView = findViewById<TextView>(R.id.usb_file_list_status)
         val table = findViewById<TableLayout>(R.id.usb_file_table)
-        statusView.text = getString(R.string.usb_list_loading)
 
         val uri = intent?.data
         if (uri == null) {
@@ -49,17 +61,19 @@ class UsbFileListActivity : AppCompatActivity() {
         }
 
         val cachedFolders = UsbFolderCache.getCachedFolders(this, uri)
-        val folders = cachedFolders ?: topLevelFolderSummaries(root).also { summaries ->
-            UsbFolderCache.save(this, uri, summaries)
-        }
-        if (folders.isEmpty()) {
-            statusView.text = getString(R.string.usb_list_no_folders)
-            table.visibility = View.GONE
+        if (cachedFolders != null) {
+            showFolderSummaries(statusView, table, cachedFolders)
             return
         }
 
-        statusView.visibility = View.GONE
-        populateTable(table, folders)
+        statusView.text = getString(R.string.usb_list_loading)
+        scanFoldersAsync(root, uri, table, statusView)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        scanExecutor.shutdownNow()
+        dismissProgressDialog()
     }
 
     override fun onSupportNavigateUp(): Boolean {
@@ -74,6 +88,9 @@ class UsbFileListActivity : AppCompatActivity() {
 
     private fun populateTable(table: TableLayout, folders: List<FolderSummary>) {
         // Keep the header row defined in XML, append folder rows below
+        while (table.childCount > 1) {
+            table.removeViewAt(1)
+        }
         val albumArtSize = resources.getDimensionPixelSize(R.dimen.usb_album_art_size)
         val verticalSpacing = (albumArtSize * 0.2f).roundToInt().coerceAtLeast(1)
         val horizontalSpacing = resources.getDimensionPixelSize(R.dimen.usb_table_horizontal_spacing)
@@ -156,7 +173,48 @@ class UsbFileListActivity : AppCompatActivity() {
         })
     }
 
-    private fun topLevelFolderSummaries(root: DocumentFile): List<FolderSummary> =
+    private fun scanFoldersAsync(
+        root: DocumentFile,
+        uri: Uri,
+        table: TableLayout,
+        statusView: TextView
+    ) {
+        showProgressDialog()
+        updateScanProgress(0, 0)
+        scanExecutor.execute {
+            val folders = collectTopLevelFolders(root)
+            val totalMp3Files = countEligibleMp3Files(folders)
+            updateScanProgress(0, totalMp3Files)
+
+            val summaries = buildFolderSummaries(folders, totalMp3Files) { processed, total ->
+                updateScanProgress(processed, total)
+            }
+            UsbFolderCache.save(this, uri, summaries)
+
+            mainHandler.post {
+                if (isFinishing || isDestroyed) return@post
+                dismissProgressDialog()
+                showFolderSummaries(statusView, table, summaries)
+            }
+        }
+    }
+
+    private fun showFolderSummaries(
+        statusView: TextView,
+        table: TableLayout,
+        folders: List<FolderSummary>
+    ) {
+        if (folders.isEmpty()) {
+            statusView.text = getString(R.string.usb_list_no_folders)
+            table.visibility = View.GONE
+        } else {
+            statusView.visibility = View.GONE
+            table.visibility = View.VISIBLE
+            populateTable(table, folders)
+        }
+    }
+
+    private fun collectTopLevelFolders(root: DocumentFile): List<Pair<String, DocumentFile>> =
         root.listFiles()
             .filter { it.isDirectory }
             .mapNotNull { dir ->
@@ -164,17 +222,49 @@ class UsbFileListActivity : AppCompatActivity() {
                 if (hiddenTopLevelFolderNames.contains(rawName.lowercase(Locale.ROOT))) return@mapNotNull null
 
                 val folderNumber = parseSelectableFolderNumber(rawName) ?: return@mapNotNull null
-                val metadata = summarizeFolderMp3Metadata(dir)
-                FolderSummary(
-                    name = folderNumber.toString().padStart(2, '0'),
-                    artist = metadata.mostCommonArtist,
-                    album = metadata.mostCommonAlbum,
-                    albumArt = metadata.albumArt
-                )
+                folderNumber.toString().padStart(2, '0') to dir
             }
-            .sortedBy { it.name.lowercase(Locale.ROOT) }
+            .sortedBy { it.first.lowercase(Locale.ROOT) }
 
-    private fun summarizeFolderMp3Metadata(folder: DocumentFile): FolderMetadataSummary {
+    private fun countEligibleMp3Files(folders: List<Pair<String, DocumentFile>>): Int {
+        var total = 0
+
+        fun traverse(doc: DocumentFile) {
+            if (doc.isDirectory) {
+                doc.listFiles().forEach { traverse(it) }
+            } else if (doc.name?.endsWith(".mp3", ignoreCase = true) == true) {
+                total++
+            }
+        }
+
+        folders.forEach { (_, dir) -> traverse(dir) }
+        return total
+    }
+
+    private fun buildFolderSummaries(
+        folders: List<Pair<String, DocumentFile>>,
+        totalMp3Files: Int,
+        onFileProcessed: (processed: Int, total: Int) -> Unit
+    ): List<FolderSummary> {
+        var processed = 0
+        return folders.map { (name, dir) ->
+            val metadata = summarizeFolderMp3Metadata(dir) {
+                processed++
+                onFileProcessed(processed, totalMp3Files)
+            }
+            FolderSummary(
+                name = name,
+                artist = metadata.mostCommonArtist,
+                album = metadata.mostCommonAlbum,
+                albumArt = metadata.albumArt
+            )
+        }
+    }
+
+    private fun summarizeFolderMp3Metadata(
+        folder: DocumentFile,
+        onMp3Processed: () -> Unit
+    ): FolderMetadataSummary {
         val artistCounts = mutableMapOf<String, Int>()
         val albumCounts = mutableMapOf<String, Int>()
         var albumArt: ByteArray? = null
@@ -196,6 +286,7 @@ class UsbFileListActivity : AppCompatActivity() {
                 if (albumArt == null && metadata.albumArt != null) {
                     albumArt = metadata.albumArt
                 }
+                onMp3Processed()
             }
         }
 
@@ -240,6 +331,47 @@ class UsbFileListActivity : AppCompatActivity() {
             .maxWithOrNull(compareBy<Map.Entry<String, Int>> { it.value }
                 .thenBy { it.key.lowercase(Locale.ROOT) })
             ?.key
+    }
+
+    private fun showProgressDialog() {
+        if (progressDialog?.isShowing == true) return
+        val view = layoutInflater.inflate(R.layout.dialog_usb_scan_progress, null)
+        progressBar = view.findViewById(R.id.usb_scan_progress_bar)
+        progressText = view.findViewById(R.id.usb_scan_progress_text)
+        progressText?.text = getString(R.string.usb_scan_preparing)
+        progressBar?.isIndeterminate = true
+
+        progressDialog = AlertDialog.Builder(this)
+            .setTitle(R.string.usb_scan_dialog_title)
+            .setView(view)
+            .setCancelable(false)
+            .create()
+        progressDialog?.show()
+    }
+
+    private fun updateScanProgress(processed: Int, total: Int) {
+        mainHandler.post {
+            val bar = progressBar ?: return@post
+            val textView = progressText
+            if (total <= 0) {
+                bar.isIndeterminate = true
+                textView?.text = getString(R.string.usb_scan_preparing)
+            } else {
+                bar.isIndeterminate = false
+                bar.max = total
+                bar.progress = processed.coerceAtMost(total)
+                textView?.text = getString(R.string.usb_scan_progress, processed, total)
+            }
+        }
+    }
+
+    private fun dismissProgressDialog() {
+        mainHandler.post {
+            progressDialog?.dismiss()
+            progressDialog = null
+            progressBar = null
+            progressText = null
+        }
     }
 }
 
