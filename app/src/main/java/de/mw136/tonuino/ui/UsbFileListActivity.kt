@@ -7,9 +7,12 @@ import android.widget.TableRow
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.documentfile.provider.DocumentFile
+import java.util.Locale
 import de.mw136.tonuino.R
 
 class UsbFileListActivity : AppCompatActivity() {
+    private val hiddenTopLevelFolderNames = setOf("advert", "mp3", "lost.dir")
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_usb_file_list)
@@ -73,6 +76,10 @@ class UsbFileListActivity : AppCompatActivity() {
     private fun topLevelFolderSummaries(root: DocumentFile): List<FolderSummary> =
         root.listFiles()
             .filter { it.isDirectory }
+            .filterNot { dir ->
+                val name = dir.name ?: return@filterNot false
+                hiddenTopLevelFolderNames.contains(name.lowercase(Locale.ROOT))
+            }
             .map { dir ->
                 val name = dir.name ?: getString(R.string.usb_folder_unknown_name)
                 FolderSummary(name, countFiles(dir))
