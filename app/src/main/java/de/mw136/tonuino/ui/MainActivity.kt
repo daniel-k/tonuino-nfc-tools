@@ -351,6 +351,7 @@ class MainActivity : NfcIntentActivity() {
     }
 
     private fun handleExternalStorageDetached() {
+        UsbFolderCache.clear()
         updateUsbListButtonState()
     }
 

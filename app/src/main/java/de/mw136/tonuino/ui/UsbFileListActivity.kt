@@ -48,7 +48,10 @@ class UsbFileListActivity : AppCompatActivity() {
             return
         }
 
-        val folders = topLevelFolderSummaries(root)
+        val cachedFolders = UsbFolderCache.getCachedFolders(this, uri)
+        val folders = cachedFolders ?: topLevelFolderSummaries(root).also { summaries ->
+            UsbFolderCache.save(this, uri, summaries)
+        }
         if (folders.isEmpty()) {
             statusView.text = getString(R.string.usb_list_no_folders)
             table.visibility = View.GONE
