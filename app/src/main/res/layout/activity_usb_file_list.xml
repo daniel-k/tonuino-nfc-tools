@@ -24,12 +24,12 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/usb_list_header_album_art"
+                    android:text="@string/usb_list_header_folder"
                     android:textStyle="bold" />
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/usb_list_header_folder"
+                    android:text="@string/usb_list_header_album_art"
                     android:textStyle="bold" />
                 <TextView
                     android:layout_width="0dp"

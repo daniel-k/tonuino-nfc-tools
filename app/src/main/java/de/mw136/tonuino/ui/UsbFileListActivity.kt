@@ -16,6 +16,7 @@ import de.mw136.tonuino.nfc.NfcIntentActivity
 import de.mw136.tonuino.ui.enter.TagData
 import java.util.Locale
 import kotlin.ExperimentalUnsignedTypes
+import kotlin.math.roundToInt
 
 @ExperimentalUnsignedTypes
 class UsbFileListActivity : AppCompatActivity() {
@@ -71,6 +72,7 @@ class UsbFileListActivity : AppCompatActivity() {
     private fun populateTable(table: TableLayout, folders: List<FolderSummary>) {
         // Keep the header row defined in XML, append folder rows below
         val albumArtSize = resources.getDimensionPixelSize(R.dimen.usb_album_art_size)
+        val verticalSpacing = (albumArtSize * 0.2f).roundToInt().coerceAtLeast(1)
         for (summary in folders) {
             val row = TableRow(this).apply {
                 isClickable = true
@@ -103,11 +105,18 @@ class UsbFileListActivity : AppCompatActivity() {
                 text = summary.album ?: getString(R.string.usb_list_unknown_album)
                 layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f)
             }
-            row.addView(artView)
             row.addView(nameView)
+            row.addView(artView)
             row.addView(artistView)
             row.addView(albumView)
-            table.addView(row)
+
+            val rowLayoutParams = TableLayout.LayoutParams(
+                TableLayout.LayoutParams.MATCH_PARENT,
+                TableLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, verticalSpacing, 0, verticalSpacing)
+            }
+            table.addView(row, rowLayoutParams)
         }
     }
 
