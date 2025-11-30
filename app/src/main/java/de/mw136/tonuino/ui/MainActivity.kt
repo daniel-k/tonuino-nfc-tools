@@ -1,6 +1,7 @@
 package de.mw136.tonuino.ui
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -13,7 +14,10 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.SystemClock
 import android.os.storage.StorageManager
+import android.os.storage.StorageVolume
+import android.provider.DocumentsContract
 import android.util.Log
 import android.view.View
 import android.widget.TextView
@@ -67,7 +71,7 @@ class MainActivity : NfcIntentActivity() {
         object : StorageManager.StorageVolumeCallback() {
             override fun onStateChanged(volume: android.os.storage.StorageVolume) {
                 if (volume.isRemovable && volume.state == Environment.MEDIA_MOUNTED) {
-                    handleExternalStorageAttached()
+                    handleExternalStorageAttached(volume)
                 }
             }
         }
@@ -133,7 +137,7 @@ class MainActivity : NfcIntentActivity() {
         startUsbFlow(usePersistedUri = false)
     }
 
-    private fun startUsbFlow(usePersistedUri: Boolean) {
+    private fun startUsbFlow(usePersistedUri: Boolean, overrideVolume: StorageVolume? = null) {
         val statusView = findViewById<TextView>(R.id.usb_result_text)
 
         val persistedUri =
@@ -152,7 +156,8 @@ class MainActivity : NfcIntentActivity() {
         usedDocumentTreeFallback = false
 
         val removableIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            storageManager?.storageVolumes?.firstOrNull { it.isRemovable }?.createAccessIntent(null)
+            val targetVolume = overrideVolume ?: storageManager?.storageVolumes?.firstOrNull { it.isRemovable }
+            targetVolume?.createAccessIntent(null)
         } else {
             null
         }?.let { withCommonFlags(it) }
@@ -278,20 +283,60 @@ class MainActivity : NfcIntentActivity() {
         }
     }
 
-    private fun handleExternalStorageAttached() {
-        if (!hasMountedRemovableStorage()) return
-        val now = android.os.SystemClock.elapsedRealtime()
+    private fun handleExternalStorageAttached(volume: StorageVolume? = null) {
+        val mountedVolume = volume ?: getMountedRemovableVolume() ?: return
+        val now = SystemClock.elapsedRealtime()
         if (now - lastUsbAttachHandledAt < 1_000) return
         lastUsbAttachHandledAt = now
-        startUsbFlow(usePersistedUri = true)
+
+        val persistedUri = usbPermissionStore.getPersistedUriIfReadable(contentResolver)
+        val persistedVolumeId = persistedUri?.let { uri ->
+            DocumentsContract.getTreeDocumentId(uri).substringBefore(":")
+        }
+        val attachedVolumeId = mountedVolume.uuid ?: if (mountedVolume.isPrimary) "primary" else null
+
+        if (persistedUri != null && attachedVolumeId != null && persistedVolumeId != null && attachedVolumeId != persistedVolumeId) {
+            showSwitchVolumeDialog(mountedVolume)
+            return
+        }
+
+        startUsbFlow(usePersistedUri = true, overrideVolume = mountedVolume)
     }
 
     private fun hasMountedRemovableStorage(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false
-        val storageManager = getSystemService(StorageManager::class.java) ?: return false
-        return storageManager.storageVolumes.any { volume ->
+        return getMountedRemovableVolume() != null
+    }
+
+    private fun getMountedRemovableVolume(): StorageVolume? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return null
+        val storageManager = getSystemService(StorageManager::class.java) ?: return null
+        return storageManager.storageVolumes.firstOrNull { volume ->
             volume.isRemovable && volume.state == Environment.MEDIA_MOUNTED
         }
+    }
+
+    private fun showSwitchVolumeDialog(volume: StorageVolume) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.main_usb_new_drive_title)
+            .setMessage(R.string.main_usb_new_drive_message)
+            .setPositiveButton(R.string.main_usb_new_drive_use) { _, _ ->
+                launchPickerForVolume(volume)
+            }
+            .setNegativeButton(R.string.main_usb_new_drive_keep) { dialog, _ -> dialog.dismiss() }
+            .show()
+    }
+
+    private fun launchPickerForVolume(volume: StorageVolume) {
+        usedDocumentTreeFallback = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val intent = volume.createAccessIntent(null)?.let { withCommonFlags(it) }
+            if (intent != null) {
+                usbStoragePicker.launch(intent)
+                return
+            }
+        }
+
+        usbStoragePicker.launch(buildDocumentTreeIntent())
     }
 
     private fun registerReceiverCompat(
@@ -311,7 +356,8 @@ class MainActivity : NfcIntentActivity() {
             registerReceiverCompat(usbAttachReceiver, filter)
             true
         } catch (e: SecurityException) {
-            Log.w(TAG, "Could not register USB receiver for action ${filter.actionsIterator().asSequence().joinToString()}: ${e.message}")
+            val actions = filter.actionsIterator().asSequence().joinToString()
+            Log.w(TAG, "Could not register USB receiver for action $actions: ${e.message}")
             false
         }
     }

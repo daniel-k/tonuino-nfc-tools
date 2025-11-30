@@ -47,6 +47,10 @@
     <string name="usb_folder_unknown_name">(unnamed folder)</string>
     <string name="usb_list_unknown_artist">(unknown artist)</string>
     <string name="usb_list_unknown_album">(unknown album)</string>
+    <string name="main_usb_new_drive_title">New USB drive detected</string>
+    <string name="main_usb_new_drive_message">Use the newly connected drive instead of the saved location?</string>
+    <string name="main_usb_new_drive_use">Use new drive</string>
+    <string name="main_usb_new_drive_keep">Keep saved location</string>
 
 
     <!-- Strings used on EditActivity -->
