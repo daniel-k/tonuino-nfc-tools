@@ -2,12 +2,14 @@ package de.mw136.tonuino.ui
 
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.TypedValue
 import android.view.View
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -16,6 +18,8 @@ import android.widget.TableRow
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.documentfile.provider.DocumentFile
+import androidx.core.content.ContextCompat
+import androidx.core.widget.ImageViewCompat
 import de.mw136.tonuino.R
 import de.mw136.tonuino.nfc.NfcIntentActivity
 import de.mw136.tonuino.ui.enter.TagData
@@ -95,12 +99,15 @@ class UsbFileListActivity : AppCompatActivity() {
         val verticalSpacing = (albumArtSize * 0.2f).roundToInt().coerceAtLeast(1)
         val horizontalSpacing = resources.getDimensionPixelSize(R.dimen.usb_table_horizontal_spacing)
         val halfHorizontalSpacing = (horizontalSpacing / 2f).roundToInt().coerceAtLeast(0)
+        val accentColor = ContextCompat.getColor(this, R.color.colorAccent)
+        val selectableBackground = selectableItemBackgroundRes()
 
         applyHorizontalSpacingToHeader(table, halfHorizontalSpacing)
         for (summary in folders) {
             val row = TableRow(this).apply {
                 isClickable = true
                 isFocusable = true
+                setBackgroundResource(selectableBackground)
                 setOnClickListener { launchWriteActivity(summary.name) }
             }
             val artView = ImageView(this).apply {
@@ -135,10 +142,20 @@ class UsbFileListActivity : AppCompatActivity() {
                     setMargins(halfHorizontalSpacing, 0, halfHorizontalSpacing, 0)
                 }
             }
+            val chevronView = ImageView(this).apply {
+                setImageResource(R.drawable.ic_chevron_right_24)
+                ImageViewCompat.setImageTintList(this, ColorStateList.valueOf(accentColor))
+                layoutParams = TableRow.LayoutParams(
+                    TableRow.LayoutParams.WRAP_CONTENT,
+                    TableRow.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(halfHorizontalSpacing, 0, halfHorizontalSpacing, 0) }
+                contentDescription = getString(R.string.usb_list_row_action_hint)
+            }
             row.addView(nameView)
             row.addView(artView)
             row.addView(artistView)
             row.addView(albumView)
+            row.addView(chevronView)
 
             val rowLayoutParams = TableLayout.LayoutParams(
                 TableLayout.LayoutParams.MATCH_PARENT,
@@ -163,6 +180,12 @@ class UsbFileListActivity : AppCompatActivity() {
             params.setMargins(halfSpacing, params.topMargin, halfSpacing, params.bottomMargin)
             child.layoutParams = params
         }
+    }
+
+    private fun selectableItemBackgroundRes(): Int {
+        val outValue = TypedValue()
+        theme.resolveAttribute(android.R.attr.selectableItemBackground, outValue, true)
+        return outValue.resourceId
     }
 
     private fun launchWriteActivity(folderName: String) {
