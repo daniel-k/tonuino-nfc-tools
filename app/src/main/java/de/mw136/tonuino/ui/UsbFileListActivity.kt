@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.widget.ImageViewCompat
 import androidx.documentfile.provider.DocumentFile
 import de.mw136.tonuino.R
+import de.mw136.tonuino.ui.Format1Mode
 import de.mw136.tonuino.nfc.NfcIntentActivity
 import de.mw136.tonuino.ui.enter.TagData
 import java.util.Locale
@@ -92,7 +93,10 @@ class UsbFileListActivity : AppCompatActivity() {
 
     private fun launchWriteActivity(folderName: String) {
         val folderNumber = parseSelectableFolderNumber(folderName) ?: return
-        val tagData = TagData().apply { setFolder(folderNumber.toUByte()) }
+        val tagData = TagData().apply {
+            setFolder(folderNumber.toUByte())
+            setMode(Format1Mode.AudioBookMultiple.value.toUByte())
+        }
         startActivity(Intent(this, EnterTagActivity::class.java).apply {
             putExtra(NfcIntentActivity.PARCEL_TAGDATA, tagData)
         })
