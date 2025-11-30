@@ -35,7 +35,7 @@
     <string name="usb_list_loading">Loading files...</string>
     <string name="usb_list_no_uri">No USB location was provided.</string>
     <string name="usb_list_error">Could not open the selected storage.</string>
-    <string name="usb_list_header_folder">Folder</string>
+    <string name="usb_list_header_folder">#</string>
     <string name="usb_list_header_files">Files</string>
     <string name="usb_list_header_artist">Artist</string>
     <string name="usb_list_header_album">Album</string>

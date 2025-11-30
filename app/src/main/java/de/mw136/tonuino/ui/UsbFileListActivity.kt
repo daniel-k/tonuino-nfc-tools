@@ -61,12 +61,10 @@ class UsbFileListActivity : AppCompatActivity() {
             val row = TableRow(this)
             val nameView = TextView(this).apply {
                 text = summary.name
-                layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f)
-            }
-            val countView = TextView(this).apply {
-                text = summary.fileCount.toString()
-                layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f)
-                textAlignment = View.TEXT_ALIGNMENT_TEXT_END
+                layoutParams = TableRow.LayoutParams(
+                    TableRow.LayoutParams.WRAP_CONTENT,
+                    TableRow.LayoutParams.WRAP_CONTENT
+                )
             }
             val artistView = TextView(this).apply {
                 text = summary.artist ?: getString(R.string.usb_list_unknown_artist)
@@ -77,7 +75,6 @@ class UsbFileListActivity : AppCompatActivity() {
                 layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f)
             }
             row.addView(nameView)
-            row.addView(countView)
             row.addView(artistView)
             row.addView(albumView)
             table.addView(row)
@@ -96,25 +93,12 @@ class UsbFileListActivity : AppCompatActivity() {
                 val metadata = summarizeFolderMp3Metadata(dir)
                 FolderSummary(
                     name = name,
-                    fileCount = countFiles(dir),
                     artist = metadata.mostCommonArtist,
                     album = metadata.mostCommonAlbum,
                     albumArt = metadata.albumArt
                 )
             }
             .sortedBy { it.name.lowercase(Locale.ROOT) }
-
-    private fun countFiles(folder: DocumentFile): Int {
-        var count = 0
-        for (child in folder.listFiles()) {
-            if (child.isDirectory) {
-                count += countFiles(child)
-            } else {
-                count += 1
-            }
-        }
-        return count
-    }
 
     private fun summarizeFolderMp3Metadata(folder: DocumentFile): FolderMetadataSummary {
         val artistCounts = mutableMapOf<String, Int>()
@@ -187,7 +171,6 @@ class UsbFileListActivity : AppCompatActivity() {
 
 data class FolderSummary(
     val name: String,
-    val fileCount: Int,
     val artist: String?,
     val album: String?,
     val albumArt: ByteArray?
