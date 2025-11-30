@@ -3,6 +3,7 @@ package de.mw136.tonuino.ui
 import android.app.Activity
 import android.content.Intent
 import android.nfc.Tag
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.storage.StorageManager
@@ -24,6 +25,7 @@ class MainActivity : NfcIntentActivity() {
     override val TAG = "MainActivity"
 
     private var usedDocumentTreeFallback = false
+    private val usbPermissionStore by lazy { UsbPermissionStore(this) }
 
     private val usbStoragePicker =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -72,6 +74,16 @@ class MainActivity : NfcIntentActivity() {
 
     fun listUsbFiles(@Suppress("UNUSED_PARAMETER") view: View) {
         val statusView = findViewById<TextView>(R.id.usb_result_text)
+
+        val persistedUri = usbPermissionStore.getPersistedUriIfReadable(contentResolver)
+        if (persistedUri != null) {
+            statusView.text = getString(R.string.main_usb_using_saved_access)
+            proceedWithUsbUri(persistedUri, statusView, rememberSelection = false)
+            return
+        } else if (usbPermissionStore.hasSavedUri()) {
+            statusView.text = getString(R.string.main_usb_saved_access_invalid)
+        }
+
         val storageManager = getSystemService(StorageManager::class.java)
         usedDocumentTreeFallback = false
 
@@ -107,26 +119,30 @@ class MainActivity : NfcIntentActivity() {
             if (uri == null) {
                 statusView.text = getString(R.string.main_usb_picker_cancelled)
             } else {
-                proceedWithUsbUri(uri, statusView)
+                proceedWithUsbUri(uri, statusView, rememberSelection = false)
             }
             return
         }
 
-        proceedWithUsbUri(uri, statusView)
+        proceedWithUsbUri(uri, statusView, rememberSelection = true)
     }
 
-    private fun proceedWithUsbUri(uri: android.net.Uri, statusView: TextView) {
-        val takeFlags =
-            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-        try {
-            contentResolver.takePersistableUriPermission(uri, takeFlags)
-        } catch (e: SecurityException) {
-            Log.w(TAG, "Could not persist USB permission: ${e.message}")
+    private fun proceedWithUsbUri(uri: Uri, statusView: TextView, rememberSelection: Boolean) {
+        if (rememberSelection) {
+            val takeFlags =
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            try {
+                contentResolver.takePersistableUriPermission(uri, takeFlags)
+                usbPermissionStore.rememberUri(uri)
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Could not persist USB permission: ${e.message}")
+            }
         }
 
         val root = DocumentFile.fromTreeUri(this, uri)
-        if (root == null) {
+        if (root == null || !root.canRead()) {
             statusView.text = getString(R.string.main_usb_open_failed)
+            usbPermissionStore.clear()
             return
         }
 

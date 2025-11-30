@@ -29,6 +29,8 @@
     <string name="main_usb_picker_cancelled">Selection was cancelled. No files read.</string>
     <string name="main_usb_missing_uri">No location was returned by the system.</string>
     <string name="main_usb_open_failed">Could not open the selected storage.</string>
+    <string name="main_usb_using_saved_access">Reusing saved USB access...</string>
+    <string name="main_usb_saved_access_invalid">Saved USB access is no longer valid. Please reselect the drive.</string>
     <string name="main_usb_no_files">No files found on the selected drive.</string>
     <string name="main_usb_listing_prefix">Files on USB drive:</string>
     <string name="usb_list_title">USB files</string>
