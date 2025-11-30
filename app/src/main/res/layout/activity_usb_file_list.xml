@@ -18,9 +18,14 @@
             android:id="@+id/usb_file_table"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:stretchColumns="1,2">
+            android:stretchColumns="2,3">
 
             <TableRow>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/usb_list_header_album_art"
+                    android:textStyle="bold" />
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

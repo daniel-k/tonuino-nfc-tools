@@ -1,8 +1,10 @@
 package de.mw136.tonuino.ui
 
+import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.os.Bundle
 import android.view.View
+import android.widget.ImageView
 import android.widget.TableLayout
 import android.widget.TableRow
 import android.widget.TextView
@@ -57,8 +59,20 @@ class UsbFileListActivity : AppCompatActivity() {
 
     private fun populateTable(table: TableLayout, folders: List<FolderSummary>) {
         // Keep the header row defined in XML, append folder rows below
+        val albumArtSize = resources.getDimensionPixelSize(R.dimen.usb_album_art_size)
         for (summary in folders) {
             val row = TableRow(this)
+            val artView = ImageView(this).apply {
+                layoutParams = TableRow.LayoutParams(albumArtSize, albumArtSize)
+                adjustViewBounds = true
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                val artBytes = summary.albumArt
+                if (artBytes != null) {
+                    BitmapFactory.decodeByteArray(artBytes, 0, artBytes.size)?.let { bitmap ->
+                        setImageBitmap(bitmap)
+                    }
+                }
+            }
             val nameView = TextView(this).apply {
                 text = summary.name
                 layoutParams = TableRow.LayoutParams(
@@ -74,6 +88,7 @@ class UsbFileListActivity : AppCompatActivity() {
                 text = summary.album ?: getString(R.string.usb_list_unknown_album)
                 layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f)
             }
+            row.addView(artView)
             row.addView(nameView)
             row.addView(artistView)
             row.addView(albumView)
