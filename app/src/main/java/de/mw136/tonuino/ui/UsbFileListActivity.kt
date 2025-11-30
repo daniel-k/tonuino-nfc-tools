@@ -38,8 +38,8 @@ import kotlin.ExperimentalUnsignedTypes
 
 @ExperimentalUnsignedTypes
 class UsbFileListActivity : AppCompatActivity() {
-    private val hiddenTopLevelFolderNames = setOf("advert", "mp3", "lost.dir")
-    private val selectableFolderRange = 1..99
+    private val folderNamePattern = Regex("^\\d{2}$")
+    private val selectableFolderRange = 0..99
     private val scanExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -113,6 +113,7 @@ class UsbFileListActivity : AppCompatActivity() {
     }
 
     private fun parseSelectableFolderNumber(name: String): Int? {
+        if (!folderNamePattern.matches(name.trim())) return null
         val numeric = name.trim().toIntOrNull() ?: return null
         return if (numeric in selectableFolderRange) numeric else null
     }
@@ -361,8 +362,6 @@ class UsbFileListActivity : AppCompatActivity() {
             .filter { it.isDirectory }
             .mapNotNull { dir ->
                 val rawName = dir.name ?: return@mapNotNull null
-                if (hiddenTopLevelFolderNames.contains(rawName.lowercase(Locale.ROOT))) return@mapNotNull null
-
                 val folderNumber = parseSelectableFolderNumber(rawName) ?: return@mapNotNull null
                 folderNumber.toString().padStart(2, '0') to dir
             }
