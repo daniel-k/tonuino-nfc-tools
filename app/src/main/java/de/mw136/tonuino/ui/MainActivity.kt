@@ -52,6 +52,8 @@ class MainActivity : NfcIntentActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 Intent.ACTION_MEDIA_MOUNTED -> handleExternalStorageAttached()
+                Intent.ACTION_MEDIA_UNMOUNTED, Intent.ACTION_MEDIA_REMOVED, Intent.ACTION_MEDIA_EJECT ->
+                    handleExternalStorageDetached()
                 UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
                     val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                     val isMassStorage = device?.let {
@@ -64,6 +66,7 @@ class MainActivity : NfcIntentActivity() {
                         handleExternalStorageAttached()
                     }
                 }
+                UsbManager.ACTION_USB_DEVICE_DETACHED -> handleExternalStorageDetached()
             }
         }
     }
@@ -71,8 +74,12 @@ class MainActivity : NfcIntentActivity() {
     private val storageVolumeCallback = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         object : StorageManager.StorageVolumeCallback() {
             override fun onStateChanged(volume: android.os.storage.StorageVolume) {
-                if (volume.isRemovable && volume.state == Environment.MEDIA_MOUNTED) {
-                    handleExternalStorageAttached(volume)
+                if (volume.isRemovable) {
+                    if (volume.state == Environment.MEDIA_MOUNTED) {
+                        handleExternalStorageAttached(volume)
+                    } else {
+                        handleExternalStorageDetached()
+                    }
                 }
             }
         }
@@ -283,12 +290,19 @@ class MainActivity : NfcIntentActivity() {
         if (!mediaReceiverRegistered) {
             val mediaFilter = IntentFilter(Intent.ACTION_MEDIA_MOUNTED).apply {
                 addDataScheme("file")
+                addAction(Intent.ACTION_MEDIA_UNMOUNTED)
+                addAction(Intent.ACTION_MEDIA_REMOVED)
+                addAction(Intent.ACTION_MEDIA_EJECT)
             }
             mediaReceiverRegistered = registerReceiverSafely(mediaFilter)
         }
 
         if (!usbAttachedReceiverRegistered) {
-            usbAttachedReceiverRegistered = registerReceiverSafely(IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED))
+            val usbFilter = IntentFilter().apply {
+                addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+                addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+            }
+            usbAttachedReceiverRegistered = registerReceiverSafely(usbFilter)
         }
 
         if (!storageVolumeCallbackRegistered && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -334,6 +348,10 @@ class MainActivity : NfcIntentActivity() {
         }
 
         startUsbFlow(usePersistedUri = true, overrideVolume = mountedVolume)
+    }
+
+    private fun handleExternalStorageDetached() {
+        updateUsbListButtonState()
     }
 
     private fun hasMountedRemovableStorage(): Boolean {
