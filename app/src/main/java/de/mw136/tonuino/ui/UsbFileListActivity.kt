@@ -22,8 +22,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.widget.ImageViewCompat
 import androidx.documentfile.provider.DocumentFile
 import de.mw136.tonuino.R
-import de.mw136.tonuino.ui.Format1Mode
 import de.mw136.tonuino.nfc.NfcIntentActivity
+import de.mw136.tonuino.ui.Format1Mode
 import de.mw136.tonuino.ui.enter.TagData
 import java.util.Locale
 import java.util.concurrent.ExecutorService
@@ -91,11 +91,17 @@ class UsbFileListActivity : AppCompatActivity() {
         return if (numeric in selectableFolderRange) numeric else null
     }
 
-    private fun launchWriteActivity(folderName: String) {
-        val folderNumber = parseSelectableFolderNumber(folderName) ?: return
+    private fun launchWriteActivity(summary: FolderSummary) {
+        val folderNumber = parseSelectableFolderNumber(summary.name) ?: return
+        val modeValue = if (summary.albumDominant) {
+            Format1Mode.AudioBookMultiple.value
+        } else {
+            // For mixed albums fall back to simple album playback.
+            Format1Mode.Album.value
+        }
         val tagData = TagData().apply {
             setFolder(folderNumber.toUByte())
-            setMode(Format1Mode.AudioBookMultiple.value.toUByte())
+            setMode(modeValue.toUByte())
         }
         startActivity(Intent(this, EnterTagActivity::class.java).apply {
             putExtra(NfcIntentActivity.PARCEL_TAGDATA, tagData)
@@ -142,7 +148,7 @@ class UsbFileListActivity : AppCompatActivity() {
             listView.adapter = FolderListAdapter(folders)
             listView.setOnItemClickListener { _, _, position, _ ->
                 if (position in folders.indices) {
-                    launchWriteActivity(folders[position].name)
+                    launchWriteActivity(folders[position])
                 }
             }
         }
@@ -166,21 +172,28 @@ class UsbFileListActivity : AppCompatActivity() {
             val chevronView = view.findViewById<ImageView>(R.id.usb_folder_chevron)
 
             val item = getItem(position)
-            val albumText = item.album ?: getString(R.string.usb_list_unknown_album)
-            val artistText = item.artist ?: getString(R.string.usb_list_unknown_artist)
+            if (item.albumDominant) {
+                val albumText = item.album ?: getString(R.string.usb_list_unknown_album)
+                val artistText = item.artist ?: getString(R.string.usb_list_unknown_artist)
 
-            titleView.text = getString(R.string.usb_folder_title_format, item.name, albumText)
-            artistView.text = artistText
+                titleView.text = getString(R.string.usb_folder_title_format, item.name, albumText)
+                artistView.text = artistText
 
-            val artBytes = item.albumArt
-            if (artBytes != null) {
-                val bitmap = BitmapFactory.decodeByteArray(artBytes, 0, artBytes.size)
-                if (bitmap != null) {
-                    artView.setImageBitmap(bitmap)
+                val artBytes = item.albumArt
+                if (artBytes != null) {
+                    val bitmap = BitmapFactory.decodeByteArray(artBytes, 0, artBytes.size)
+                    if (bitmap != null) {
+                        artView.setImageBitmap(bitmap)
+                    } else {
+                        artView.setImageDrawable(null)
+                    }
                 } else {
                     artView.setImageDrawable(null)
                 }
             } else {
+                val trackLabel = getString(R.string.usb_list_track_count, item.trackCount)
+                titleView.text = getString(R.string.usb_folder_title_format, item.name, trackLabel)
+                artistView.text = buildTrackPreview(item.trackTitles, item.trackCount)
                 artView.setImageDrawable(null)
             }
 
@@ -189,6 +202,18 @@ class UsbFileListActivity : AppCompatActivity() {
             }
 
             return view
+        }
+
+        private fun buildTrackPreview(titles: List<String>, totalCount: Int): String {
+            if (titles.isEmpty()) return getString(R.string.usb_list_unknown_artist)
+            val shortened = titles.take(3).map { shortenTitle(it) }
+            val base = shortened.joinToString(", ")
+            return if (totalCount > shortened.size) "$base, ..." else base
+        }
+
+        private fun shortenTitle(title: String, maxLen: Int = 22): String {
+            if (title.length <= maxLen) return title
+            return title.take(maxLen - 3).trimEnd() + "..."
         }
     }
 
@@ -230,11 +255,15 @@ class UsbFileListActivity : AppCompatActivity() {
                 processed++
                 onFileProcessed(processed, totalMp3Files)
             }
+            val dominantAlbum = metadata.hasDominantAlbum()
             FolderSummary(
                 name = name,
                 artist = metadata.mostCommonArtist,
                 album = metadata.mostCommonAlbum,
-                albumArt = metadata.albumArt
+                albumArt = if (dominantAlbum) metadata.albumArt else null,
+                albumDominant = dominantAlbum,
+                trackCount = metadata.trackCount,
+                trackTitles = metadata.trackTitles
             )
         }
     }
@@ -246,6 +275,8 @@ class UsbFileListActivity : AppCompatActivity() {
         val artistCounts = mutableMapOf<String, Int>()
         val albumCounts = mutableMapOf<String, Int>()
         var albumArt: ByteArray? = null
+        val trackTitles = mutableListOf<String>()
+        var trackCount = 0
 
         fun traverse(doc: DocumentFile) {
             if (doc.isDirectory) {
@@ -261,9 +292,13 @@ class UsbFileListActivity : AppCompatActivity() {
                 metadata.album?.let { album ->
                     albumCounts[album] = (albumCounts[album] ?: 0) + 1
                 }
+                metadata.title?.let { title ->
+                    if (trackTitles.size < 3) trackTitles.add(title)
+                }
                 if (albumArt == null && metadata.albumArt != null) {
                     albumArt = metadata.albumArt
                 }
+                trackCount++
                 onMp3Processed()
             }
         }
@@ -273,7 +308,10 @@ class UsbFileListActivity : AppCompatActivity() {
         return FolderMetadataSummary(
             mostCommonArtist = mostCommon(artistCounts),
             mostCommonAlbum = mostCommon(albumCounts),
-            albumArt = albumArt
+            albumArt = albumArt,
+            trackCount = trackCount,
+            trackTitles = trackTitles.toList(),
+            mostCommonAlbumCount = albumCounts.maxOfOrNull { it.value } ?: 0
         )
     }
 
@@ -281,6 +319,7 @@ class UsbFileListActivity : AppCompatActivity() {
         var artist: String? = null
         var album: String? = null
         var albumArt: ByteArray? = null
+        var title: String? = null
 
         try {
             contentResolver.openFileDescriptor(file.uri, "r")?.use { fd ->
@@ -291,6 +330,8 @@ class UsbFileListActivity : AppCompatActivity() {
                         .takeIf { it.isNotEmpty() }
                     album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)?.trim().orEmpty()
                         .takeIf { it.isNotEmpty() }
+                    title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)?.trim().orEmpty()
+                        .takeIf { it.isNotEmpty() }
                     albumArt = retriever.embeddedPicture
                 } finally {
                     retriever.release()
@@ -300,7 +341,14 @@ class UsbFileListActivity : AppCompatActivity() {
             // Ignore unreadable files; treat as missing metadata.
         }
 
-        return Mp3Metadata(artist, album, albumArt)
+        if (title == null) {
+            val rawName = file.name
+            if (rawName != null) {
+                title = rawName.substringBeforeLast('.', rawName)
+            }
+        }
+
+        return Mp3Metadata(artist, album, albumArt, title)
     }
 
     private fun mostCommon(counts: Map<String, Int>): String? {
@@ -357,13 +405,29 @@ data class FolderSummary(
     val name: String,
     val artist: String?,
     val album: String?,
-    val albumArt: ByteArray?
+    val albumArt: ByteArray?,
+    val albumDominant: Boolean,
+    val trackCount: Int,
+    val trackTitles: List<String>
 )
 
 data class FolderMetadataSummary(
     val mostCommonArtist: String?,
     val mostCommonAlbum: String?,
-    val albumArt: ByteArray?
-)
+    val albumArt: ByteArray?,
+    val trackCount: Int,
+    val trackTitles: List<String>,
+    val mostCommonAlbumCount: Int
+) {
+    fun hasDominantAlbum(threshold: Double = 0.8): Boolean {
+        if (trackCount == 0) return false
+        return mostCommonAlbumCount.toDouble() >= (trackCount * threshold)
+    }
+}
 
-data class Mp3Metadata(val artist: String?, val album: String?, val albumArt: ByteArray?)
+data class Mp3Metadata(
+    val artist: String?,
+    val album: String?,
+    val albumArt: ByteArray?,
+    val title: String?
+)

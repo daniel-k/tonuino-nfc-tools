@@ -53,6 +53,7 @@
     <string name="usb_scan_preparing">Preparing scan...</string>
     <string name="usb_scan_progress">%1$d / %2$d files processed</string>
     <string name="usb_list_row_action_hint">Write tag with this folder</string>
+    <string name="usb_list_track_count">%1$d tracks</string>
     <string name="main_usb_new_drive_title">New USB drive detected</string>
     <string name="main_usb_new_drive_message">Use the newly connected drive instead of the saved location?</string>
     <string name="main_usb_new_drive_use">Use new drive</string>
