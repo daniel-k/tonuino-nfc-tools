@@ -169,11 +169,16 @@ class UsbFileListActivity : AppCompatActivity() {
             val artView = view.findViewById<ImageView>(R.id.usb_folder_album_art)
             val titleView = view.findViewById<TextView>(R.id.usb_folder_title)
             val artistView = view.findViewById<TextView>(R.id.usb_folder_artist)
+            val trackCountView = view.findViewById<TextView>(R.id.usb_folder_track_count)
             val chevronView = view.findViewById<ImageView>(R.id.usb_folder_chevron)
 
             val item = getItem(position)
             if (item.albumDominant) {
                 artistView.visibility = View.VISIBLE
+                trackCountView.visibility = if (item.trackCount > 0) View.VISIBLE else View.GONE
+                if (item.trackCount > 0) {
+                    trackCountView.text = getString(R.string.usb_list_track_count, item.trackCount)
+                }
 
                 val albumText = item.album ?: getString(R.string.usb_list_unknown_album)
                 val artistText = item.artist ?: getString(R.string.usb_list_unknown_artist)
@@ -194,6 +199,7 @@ class UsbFileListActivity : AppCompatActivity() {
                 }
             } else {
                 val isEmpty = item.trackCount == 0
+                trackCountView.visibility = if (isEmpty) View.GONE else View.VISIBLE
                 val trackLabel = if (isEmpty) {
                     getString(R.string.usb_list_empty_folder)
                 } else {
@@ -206,6 +212,7 @@ class UsbFileListActivity : AppCompatActivity() {
                 } else {
                     artistView.text = buildTrackPreview(item.trackTitles, item.trackCount)
                     artistView.visibility = View.VISIBLE
+                    trackCountView.text = getString(R.string.usb_list_track_count, item.trackCount)
                 }
                 artView.setImageDrawable(null)
             }
