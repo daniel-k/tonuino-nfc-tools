@@ -173,6 +173,8 @@ class UsbFileListActivity : AppCompatActivity() {
 
             val item = getItem(position)
             if (item.albumDominant) {
+                artistView.visibility = View.VISIBLE
+
                 val albumText = item.album ?: getString(R.string.usb_list_unknown_album)
                 val artistText = item.artist ?: getString(R.string.usb_list_unknown_artist)
 
@@ -191,9 +193,20 @@ class UsbFileListActivity : AppCompatActivity() {
                     artView.setImageDrawable(null)
                 }
             } else {
-                val trackLabel = getString(R.string.usb_list_track_count, item.trackCount)
+                val isEmpty = item.trackCount == 0
+                val trackLabel = if (isEmpty) {
+                    getString(R.string.usb_list_empty_folder)
+                } else {
+                    getString(R.string.usb_list_track_count, item.trackCount)
+                }
                 titleView.text = getString(R.string.usb_folder_title_format, item.name, trackLabel)
-                artistView.text = buildTrackPreview(item.trackTitles, item.trackCount)
+                if (isEmpty) {
+                    artistView.text = ""
+                    artistView.visibility = View.GONE
+                } else {
+                    artistView.text = buildTrackPreview(item.trackTitles, item.trackCount)
+                    artistView.visibility = View.VISIBLE
+                }
                 artView.setImageDrawable(null)
             }
 
