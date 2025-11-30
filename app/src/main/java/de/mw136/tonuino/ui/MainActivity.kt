@@ -1,11 +1,18 @@
 package de.mw136.tonuino.ui
 
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.hardware.usb.UsbConstants
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
 import android.nfc.Tag
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.storage.StorageManager
 import android.util.Log
 import android.view.View
@@ -26,15 +33,61 @@ class MainActivity : NfcIntentActivity() {
 
     private var usedDocumentTreeFallback = false
     private val usbPermissionStore by lazy { UsbPermissionStore(this) }
+    private var mediaReceiverRegistered = false
+    private var usbAttachedReceiverRegistered = false
+    private var storageVolumeCallbackRegistered = false
+    private var lastUsbAttachHandledAt = 0L
 
     private val usbStoragePicker =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             handleUsbStorageResult(result)
         }
 
+    private val usbAttachReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_MEDIA_MOUNTED -> handleExternalStorageAttached()
+                UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                    val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    val isMassStorage = device?.let {
+                        (0 until it.interfaceCount).any { index ->
+                            it.getInterface(index).interfaceClass == UsbConstants.USB_CLASS_MASS_STORAGE
+                        }
+                    } ?: false
+
+                    if (isMassStorage) {
+                        handleExternalStorageAttached()
+                    }
+                }
+            }
+        }
+    }
+
+    private val storageVolumeCallback = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        object : StorageManager.StorageVolumeCallback() {
+            override fun onStateChanged(volume: android.os.storage.StorageVolume) {
+                if (volume.isRemovable && volume.state == Environment.MEDIA_MOUNTED) {
+                    handleExternalStorageAttached()
+                }
+            }
+        }
+    } else {
+        null
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        registerUsbAttachReceiver()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        unregisterUsbAttachReceiver()
     }
 
     override fun onResume() {
@@ -186,6 +239,89 @@ class MainActivity : NfcIntentActivity() {
     @Suppress("UNUSED_PARAMETER")
     fun openNfcSettings(view: View) {
         startActivity(Intent(android.provider.Settings.ACTION_NFC_SETTINGS))
+    }
+
+    private fun registerUsbAttachReceiver() {
+        if (!mediaReceiverRegistered) {
+            val mediaFilter = IntentFilter(Intent.ACTION_MEDIA_MOUNTED).apply {
+                addDataScheme("file")
+            }
+            mediaReceiverRegistered = registerReceiverSafely(mediaFilter)
+        }
+
+        if (!usbAttachedReceiverRegistered) {
+            usbAttachedReceiverRegistered = registerReceiverSafely(IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED))
+        }
+
+        if (!storageVolumeCallbackRegistered && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            storageVolumeCallback?.let { callback ->
+                getSystemService(StorageManager::class.java)?.registerStorageVolumeCallback(mainExecutor, callback)
+                storageVolumeCallbackRegistered = true
+            }
+        }
+    }
+
+    private fun unregisterUsbAttachReceiver() {
+        if (mediaReceiverRegistered) {
+            unregisterReceiverSafely()
+            mediaReceiverRegistered = false
+        }
+        if (usbAttachedReceiverRegistered) {
+            unregisterReceiverSafely()
+            usbAttachedReceiverRegistered = false
+        }
+        if (storageVolumeCallbackRegistered && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            storageVolumeCallback?.let { callback ->
+                getSystemService(StorageManager::class.java)?.unregisterStorageVolumeCallback(callback)
+            }
+            storageVolumeCallbackRegistered = false
+        }
+    }
+
+    private fun handleExternalStorageAttached() {
+        if (!hasMountedRemovableStorage()) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastUsbAttachHandledAt < 1_000) return
+        lastUsbAttachHandledAt = now
+        startUsbFlow(usePersistedUri = true)
+    }
+
+    private fun hasMountedRemovableStorage(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false
+        val storageManager = getSystemService(StorageManager::class.java) ?: return false
+        return storageManager.storageVolumes.any { volume ->
+            volume.isRemovable && volume.state == Environment.MEDIA_MOUNTED
+        }
+    }
+
+    private fun registerReceiverCompat(
+        receiver: BroadcastReceiver,
+        filter: IntentFilter,
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(receiver, filter)
+        }
+    }
+
+    private fun registerReceiverSafely(filter: IntentFilter): Boolean {
+        return try {
+            registerReceiverCompat(usbAttachReceiver, filter)
+            true
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Could not register USB receiver for action ${filter.actionsIterator().asSequence().joinToString()}: ${e.message}")
+            false
+        }
+    }
+
+    private fun unregisterReceiverSafely() {
+        try {
+            unregisterReceiver(usbAttachReceiver)
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "USB receiver already unregistered: ${e.message}")
+        }
     }
 
     override fun onNfcTag(tag: Tag) {
