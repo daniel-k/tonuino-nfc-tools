@@ -105,6 +105,35 @@
                     android:layout_height="wrap_content"
                     android:onClick="showBulkWriteActivity"
                     android:text="@string/main_write_bulk_button" />
+
+            <Space
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/margin_default" />
+
+            <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/main_usb_headline"
+                    android:textAppearance="@style/TextAppearance.MaterialComponents.Headline4" />
+
+            <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/main_usb_description" />
+
+            <Button
+                    android:id="@+id/usb_list_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:onClick="listUsbFiles"
+                    android:text="@string/main_usb_button" />
+
+            <TextView
+                    android:id="@+id/usb_result_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/margin_half"
+                    android:textIsSelectable="true" />
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

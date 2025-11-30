@@ -1,11 +1,17 @@
 package de.mw136.tonuino.ui
 
+import android.app.Activity
 import android.content.Intent
 import android.nfc.Tag
+import android.os.Build
 import android.os.Bundle
+import android.os.storage.StorageManager
 import android.util.Log
 import android.view.View
 import android.widget.TextView
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.documentfile.provider.DocumentFile
 import de.mw136.tonuino.BuildConfig
 import de.mw136.tonuino.R
 import de.mw136.tonuino.byteArrayToHex
@@ -16,6 +22,11 @@ import de.mw136.tonuino.ui.enter.TagData
 @ExperimentalUnsignedTypes
 class MainActivity : NfcIntentActivity() {
     override val TAG = "MainActivity"
+
+    private val usbStoragePicker =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            handleUsbStorageResult(result)
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,6 +66,84 @@ class MainActivity : NfcIntentActivity() {
         if (BuildConfig.DEBUG) {
             enabledContainer.visibility = View.VISIBLE
         }
+    }
+
+    fun listUsbFiles(@Suppress("UNUSED_PARAMETER") view: View) {
+        val statusView = findViewById<TextView>(R.id.usb_result_text)
+        val storageManager = getSystemService(StorageManager::class.java)
+
+        val removableIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            storageManager?.storageVolumes?.firstOrNull { it.isRemovable }?.createAccessIntent(null)
+        } else {
+            null
+        }
+
+        if (removableIntent != null) {
+            usbStoragePicker.launch(removableIntent)
+            return
+        }
+
+        statusView.text = getString(R.string.main_usb_not_found)
+        usbStoragePicker.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE))
+    }
+
+    private fun handleUsbStorageResult(result: ActivityResult) {
+        val statusView = findViewById<TextView>(R.id.usb_result_text)
+
+        if (result.resultCode != Activity.RESULT_OK) {
+            statusView.text = getString(R.string.main_usb_picker_cancelled)
+            return
+        }
+
+        val resultData = result.data
+        val uri = resultData?.data
+        if (uri == null) {
+            statusView.text = getString(R.string.main_usb_missing_uri)
+            return
+        }
+
+        val takeFlags =
+            (resultData.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION))
+        try {
+            contentResolver.takePersistableUriPermission(uri, takeFlags)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Could not persist USB permission: ${e.message}")
+        }
+
+        val root = DocumentFile.fromTreeUri(this, uri)
+        if (root == null) {
+            statusView.text = getString(R.string.main_usb_open_failed)
+            return
+        }
+
+        val files = listFilesRecursively(root)
+        if (files.isEmpty()) {
+            statusView.text = getString(R.string.main_usb_no_files)
+            return
+        }
+
+        val message = buildString {
+            appendLine(getString(R.string.main_usb_listing_prefix))
+            files.forEach { appendLine(it) }
+        }.trimEnd()
+
+        statusView.text = message
+        Log.i(TAG, "Files on USB drive:\n$message")
+    }
+
+    private fun listFilesRecursively(node: DocumentFile, prefix: String = ""): List<String> {
+        val collected = mutableListOf<String>()
+        for (child in node.listFiles()) {
+            val name = child.name ?: "(unnamed)"
+            val path = if (prefix.isEmpty()) name else "$prefix/$name"
+            if (child.isDirectory) {
+                collected.add("$path/")
+                collected.addAll(listFilesRecursively(child, path))
+            } else {
+                collected.add(path)
+            }
+        }
+        return collected
     }
 
     fun showWriteActivity(view: View) {
