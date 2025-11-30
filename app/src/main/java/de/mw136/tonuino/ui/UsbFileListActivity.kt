@@ -199,19 +199,16 @@ class UsbFileListActivity : AppCompatActivity() {
                 }
             } else {
                 val isEmpty = item.trackCount == 0
-                trackCountView.visibility = if (isEmpty) View.GONE else View.VISIBLE
-                val trackLabel = if (isEmpty) {
-                    getString(R.string.usb_list_empty_folder)
-                } else {
-                    getString(R.string.usb_list_track_count, item.trackCount)
-                }
-                titleView.text = getString(R.string.usb_folder_title_format, item.name, trackLabel)
                 if (isEmpty) {
+                    titleView.text = getString(R.string.usb_folder_title_format, item.name, getString(R.string.usb_list_empty_folder))
                     artistView.text = ""
                     artistView.visibility = View.GONE
+                    trackCountView.visibility = View.GONE
                 } else {
+                    titleView.text = getString(R.string.usb_folder_title_format, item.name, getString(R.string.usb_list_mixed_album))
                     artistView.text = buildTrackPreview(item.trackTitles, item.trackCount)
                     artistView.visibility = View.VISIBLE
+                    trackCountView.visibility = View.VISIBLE
                     trackCountView.text = getString(R.string.usb_list_track_count, item.trackCount)
                 }
                 artView.setImageDrawable(null)
