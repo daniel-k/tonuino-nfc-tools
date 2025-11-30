@@ -73,6 +73,10 @@ class UsbFileListActivity : AppCompatActivity() {
         // Keep the header row defined in XML, append folder rows below
         val albumArtSize = resources.getDimensionPixelSize(R.dimen.usb_album_art_size)
         val verticalSpacing = (albumArtSize * 0.2f).roundToInt().coerceAtLeast(1)
+        val horizontalSpacing = resources.getDimensionPixelSize(R.dimen.usb_table_horizontal_spacing)
+        val halfHorizontalSpacing = (horizontalSpacing / 2f).roundToInt().coerceAtLeast(0)
+
+        applyHorizontalSpacingToHeader(table, halfHorizontalSpacing)
         for (summary in folders) {
             val row = TableRow(this).apply {
                 isClickable = true
@@ -80,7 +84,9 @@ class UsbFileListActivity : AppCompatActivity() {
                 setOnClickListener { launchWriteActivity(summary.name) }
             }
             val artView = ImageView(this).apply {
-                layoutParams = TableRow.LayoutParams(albumArtSize, albumArtSize)
+                layoutParams = TableRow.LayoutParams(albumArtSize, albumArtSize).apply {
+                    setMargins(halfHorizontalSpacing, 0, halfHorizontalSpacing, 0)
+                }
                 adjustViewBounds = true
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 val artBytes = summary.albumArt
@@ -95,15 +101,19 @@ class UsbFileListActivity : AppCompatActivity() {
                 layoutParams = TableRow.LayoutParams(
                     TableRow.LayoutParams.WRAP_CONTENT,
                     TableRow.LayoutParams.WRAP_CONTENT
-                )
+                ).apply { setMargins(halfHorizontalSpacing, 0, halfHorizontalSpacing, 0) }
             }
             val artistView = TextView(this).apply {
                 text = summary.artist ?: getString(R.string.usb_list_unknown_artist)
-                layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f)
+                layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    setMargins(halfHorizontalSpacing, 0, halfHorizontalSpacing, 0)
+                }
             }
             val albumView = TextView(this).apply {
                 text = summary.album ?: getString(R.string.usb_list_unknown_album)
-                layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f)
+                layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    setMargins(halfHorizontalSpacing, 0, halfHorizontalSpacing, 0)
+                }
             }
             row.addView(nameView)
             row.addView(artView)
@@ -117,6 +127,21 @@ class UsbFileListActivity : AppCompatActivity() {
                 setMargins(0, verticalSpacing, 0, verticalSpacing)
             }
             table.addView(row, rowLayoutParams)
+        }
+    }
+
+    private fun applyHorizontalSpacingToHeader(table: TableLayout, halfSpacing: Int) {
+        val headerRow = table.getChildAt(0) as? TableRow ?: return
+        for (i in 0 until headerRow.childCount) {
+            val child = headerRow.getChildAt(i)
+            val existingParams = child.layoutParams
+            val params = if (existingParams is TableRow.LayoutParams) {
+                existingParams
+            } else {
+                TableRow.LayoutParams(existingParams)
+            }
+            params.setMargins(halfSpacing, params.topMargin, halfSpacing, params.bottomMargin)
+            child.layoutParams = params
         }
     }
 
