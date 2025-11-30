@@ -50,6 +50,10 @@
                 android:name=".ui.ReadActivity"
                 android:parentActivityName=".ui.MainActivity"
                 android:exported="false"/>
+        <activity
+                android:name=".ui.UsbFileListActivity"
+                android:parentActivityName=".ui.MainActivity"
+                android:exported="false"/>
     </application>
 
 </manifest>

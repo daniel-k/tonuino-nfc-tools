@@ -115,21 +115,6 @@ class MainActivity : NfcIntentActivity() {
         proceedWithUsbUri(uri, statusView)
     }
 
-    private fun listFilesRecursively(node: DocumentFile, prefix: String = ""): List<String> {
-        val collected = mutableListOf<String>()
-        for (child in node.listFiles()) {
-            val name = child.name ?: "(unnamed)"
-            val path = if (prefix.isEmpty()) name else "$prefix/$name"
-            if (child.isDirectory) {
-                collected.add("$path/")
-                collected.addAll(listFilesRecursively(child, path))
-            } else {
-                collected.add(path)
-            }
-        }
-        return collected
-    }
-
     private fun proceedWithUsbUri(uri: android.net.Uri, statusView: TextView) {
         val takeFlags =
             Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
@@ -145,19 +130,11 @@ class MainActivity : NfcIntentActivity() {
             return
         }
 
-        val files = listFilesRecursively(root)
-        if (files.isEmpty()) {
-            statusView.text = getString(R.string.main_usb_no_files)
-            return
-        }
-
-        val message = buildString {
-            appendLine(getString(R.string.main_usb_listing_prefix))
-            files.forEach { appendLine(it) }
-        }.trimEnd()
-
-        statusView.text = message
-        Log.i(TAG, "Files on USB drive:\n$message")
+        statusView.text = getString(R.string.usb_list_loading)
+        Log.i(TAG, "Opening USB file list for uri=$uri")
+        startActivity(Intent(this, UsbFileListActivity::class.java).apply {
+            data = uri
+        })
     }
 
     private fun buildDocumentTreeIntent(): Intent =
