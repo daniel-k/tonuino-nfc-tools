@@ -23,9 +23,9 @@
     <string name="main_write_tag_button">Write data on tag</string>
     <string name="main_write_bulk_button">Enter bulk write list</string>
     <string name="main_usb_headline">USB storage</string>
-    <string name="main_usb_description">Connect a USB thumb drive or SD card reader and let the app list its files.</string>
-    <string name="main_usb_button">List files on USB drive</string>
-    <string name="main_usb_pick_other_button">Choose different location</string>
+    <string name="main_usb_description">Connect your Tonuino microSD via a USB card reader (or via the builtin USB of the DFPlayer Mini) to write tags. It will scan the content of the microSD card giving you an overview of the content of each folder. Tapping on a folder lets you directly write a new tag for it.</string>
+    <string name="main_usb_button">Show folders</string>
+    <string name="main_usb_pick_other_button">Select location</string>
     <string name="main_usb_not_found">No removable storage detected. Connect a USB drive or card reader or pick a location manually.</string>
     <string name="main_usb_picker_cancelled">Selection was cancelled. No files read.</string>
     <string name="main_usb_missing_uri">No location was returned by the system.</string>
