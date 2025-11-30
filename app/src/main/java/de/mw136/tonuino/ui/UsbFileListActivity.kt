@@ -1,14 +1,20 @@
 package de.mw136.tonuino.ui
 
 import android.app.AlertDialog
+import android.content.BroadcastReceiver
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.os.storage.StorageManager
+import android.os.storage.StorageVolume
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -37,9 +43,39 @@ class UsbFileListActivity : AppCompatActivity() {
     private val scanExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    private var currentScanId = 0
+    private var storageReceiverRegistered = false
+    private var storageVolumeCallbackRegistered = false
+    private var rootUri: Uri? = null
+
+    private lateinit var statusView: TextView
+    private lateinit var listView: ListView
+
     private var progressDialog: AlertDialog? = null
     private var progressBar: ProgressBar? = null
     private var progressText: TextView? = null
+
+    private val storageReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_MEDIA_MOUNTED -> handleStorageMounted()
+                Intent.ACTION_MEDIA_UNMOUNTED, Intent.ACTION_MEDIA_REMOVED, Intent.ACTION_MEDIA_EJECT -> handleStorageRemoved()
+            }
+        }
+    }
+
+    private val storageVolumeCallback =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) object : StorageManager.StorageVolumeCallback() {
+            override fun onStateChanged(volume: StorageVolume) {
+                if (!volume.isRemovable) return
+                when (volume.state) {
+                    Environment.MEDIA_MOUNTED -> handleStorageMounted()
+                    else -> handleStorageRemoved()
+                }
+            }
+        } else {
+            null
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,31 +84,21 @@ class UsbFileListActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.title = getString(R.string.usb_list_title)
 
-        val statusView = findViewById<TextView>(R.id.usb_file_list_status)
-        val listView = findViewById<ListView>(R.id.usb_folder_list)
+        statusView = findViewById(R.id.usb_file_list_status)
+        listView = findViewById(R.id.usb_folder_list)
 
-        val uri = intent?.data
-        if (uri == null) {
-            statusView.text = getString(R.string.usb_list_no_uri)
-            listView.visibility = View.GONE
-            return
-        }
+        rootUri = intent?.data
+        startScan(useCache = true)
+    }
 
-        val root = DocumentFile.fromTreeUri(this, uri)
-        if (root == null) {
-            statusView.text = getString(R.string.usb_list_error)
-            listView.visibility = View.GONE
-            return
-        }
+    override fun onStart() {
+        super.onStart()
+        registerStorageObservers()
+    }
 
-        val cachedFolders = UsbFolderCache.getCachedFolders(this, uri)
-        if (cachedFolders != null) {
-            showFolderSummaries(statusView, listView, cachedFolders)
-            return
-        }
-
-        statusView.text = getString(R.string.usb_list_loading)
-        scanFoldersAsync(root, uri, listView, statusView)
+    override fun onStop() {
+        super.onStop()
+        unregisterStorageObservers()
     }
 
     override fun onDestroy() {
@@ -108,26 +134,56 @@ class UsbFileListActivity : AppCompatActivity() {
         })
     }
 
+    private fun startScan(useCache: Boolean) {
+        val uri = rootUri
+        if (uri == null) {
+            statusView.text = getString(R.string.usb_list_no_uri)
+            listView.visibility = View.GONE
+            return
+        }
+
+        val root = DocumentFile.fromTreeUri(this, uri)
+        if (root == null) {
+            statusView.text = getString(R.string.usb_list_error)
+            listView.visibility = View.GONE
+            return
+        }
+
+        if (useCache) {
+            val cachedFolders = UsbFolderCache.getCachedFolders(this, uri)
+            if (cachedFolders != null) {
+                showFolderSummaries(statusView, listView, cachedFolders)
+                return
+            }
+        }
+
+        statusView.visibility = View.VISIBLE
+        statusView.text = getString(R.string.usb_list_loading)
+        listView.visibility = View.GONE
+        scanFoldersAsync(root, uri, listView, statusView)
+    }
+
     private fun scanFoldersAsync(
         root: DocumentFile,
         uri: Uri,
         listView: ListView,
         statusView: TextView
     ) {
+        val scanId = ++currentScanId
         showProgressDialog()
-        updateScanProgress(0, 0)
+        updateScanProgress(0, 0, scanId)
         scanExecutor.execute {
             val folders = collectTopLevelFolders(root)
             val totalMp3Files = countEligibleMp3Files(folders)
-            updateScanProgress(0, totalMp3Files)
+            updateScanProgress(0, totalMp3Files, scanId)
 
             val summaries = buildFolderSummaries(folders, totalMp3Files) { processed, total ->
-                updateScanProgress(processed, total)
+                updateScanProgress(processed, total, scanId)
             }
             UsbFolderCache.save(this, uri, summaries)
 
             mainHandler.post {
-                if (isFinishing || isDestroyed) return@post
+                if (isFinishing || isDestroyed || scanId != currentScanId) return@post
                 dismissProgressDialog()
                 showFolderSummaries(statusView, listView, summaries)
             }
@@ -152,6 +208,56 @@ class UsbFileListActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun registerStorageObservers() {
+        if (!storageReceiverRegistered) {
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_MEDIA_MOUNTED)
+                addAction(Intent.ACTION_MEDIA_UNMOUNTED)
+                addAction(Intent.ACTION_MEDIA_REMOVED)
+                addAction(Intent.ACTION_MEDIA_EJECT)
+                addDataScheme("file")
+            }
+            registerReceiver(storageReceiver, filter)
+            storageReceiverRegistered = true
+        }
+
+        if (!storageVolumeCallbackRegistered && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            storageVolumeCallback?.let { callback ->
+                getSystemService(StorageManager::class.java)?.registerStorageVolumeCallback(mainExecutor, callback)
+                storageVolumeCallbackRegistered = true
+            }
+        }
+    }
+
+    private fun unregisterStorageObservers() {
+        if (storageReceiverRegistered) {
+            try {
+                unregisterReceiver(storageReceiver)
+            } catch (_: IllegalArgumentException) {
+            }
+            storageReceiverRegistered = false
+        }
+        if (storageVolumeCallbackRegistered && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            storageVolumeCallback?.let { callback ->
+                getSystemService(StorageManager::class.java)?.unregisterStorageVolumeCallback(callback)
+            }
+            storageVolumeCallbackRegistered = false
+        }
+    }
+
+    private fun handleStorageMounted() {
+        UsbFolderCache.clear()
+        startScan(useCache = false)
+    }
+
+    private fun handleStorageRemoved() {
+        UsbFolderCache.clear()
+        dismissProgressDialog()
+        statusView.visibility = View.VISIBLE
+        statusView.text = getString(R.string.usb_list_error)
+        listView.visibility = View.GONE
     }
 
     private inner class FolderListAdapter(private val items: List<FolderSummary>) : BaseAdapter() {
@@ -417,7 +523,8 @@ class UsbFileListActivity : AppCompatActivity() {
         progressDialog?.show()
     }
 
-    private fun updateScanProgress(processed: Int, total: Int) {
+    private fun updateScanProgress(processed: Int, total: Int, scanId: Int) {
+        if (scanId != currentScanId) return
         mainHandler.post {
             val bar = progressBar ?: return@post
             val textView = progressText
