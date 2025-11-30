@@ -9,17 +9,18 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.util.TypedValue
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
+import android.widget.BaseAdapter
 import android.widget.ImageView
+import android.widget.ListView
 import android.widget.ProgressBar
-import android.widget.TableLayout
-import android.widget.TableRow
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.documentfile.provider.DocumentFile
 import androidx.core.content.ContextCompat
 import androidx.core.widget.ImageViewCompat
+import androidx.documentfile.provider.DocumentFile
 import de.mw136.tonuino.R
 import de.mw136.tonuino.nfc.NfcIntentActivity
 import de.mw136.tonuino.ui.enter.TagData
@@ -27,7 +28,6 @@ import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.ExperimentalUnsignedTypes
-import kotlin.math.roundToInt
 
 @ExperimentalUnsignedTypes
 class UsbFileListActivity : AppCompatActivity() {
@@ -48,30 +48,30 @@ class UsbFileListActivity : AppCompatActivity() {
         supportActionBar?.title = getString(R.string.usb_list_title)
 
         val statusView = findViewById<TextView>(R.id.usb_file_list_status)
-        val table = findViewById<TableLayout>(R.id.usb_file_table)
+        val listView = findViewById<ListView>(R.id.usb_folder_list)
 
         val uri = intent?.data
         if (uri == null) {
             statusView.text = getString(R.string.usb_list_no_uri)
-            table.visibility = View.GONE
+            listView.visibility = View.GONE
             return
         }
 
         val root = DocumentFile.fromTreeUri(this, uri)
         if (root == null) {
             statusView.text = getString(R.string.usb_list_error)
-            table.visibility = View.GONE
+            listView.visibility = View.GONE
             return
         }
 
         val cachedFolders = UsbFolderCache.getCachedFolders(this, uri)
         if (cachedFolders != null) {
-            showFolderSummaries(statusView, table, cachedFolders)
+            showFolderSummaries(statusView, listView, cachedFolders)
             return
         }
 
         statusView.text = getString(R.string.usb_list_loading)
-        scanFoldersAsync(root, uri, table, statusView)
+        scanFoldersAsync(root, uri, listView, statusView)
     }
 
     override fun onDestroy() {
@@ -90,104 +90,6 @@ class UsbFileListActivity : AppCompatActivity() {
         return if (numeric in selectableFolderRange) numeric else null
     }
 
-    private fun populateTable(table: TableLayout, folders: List<FolderSummary>) {
-        // Keep the header row defined in XML, append folder rows below
-        while (table.childCount > 1) {
-            table.removeViewAt(1)
-        }
-        val albumArtSize = resources.getDimensionPixelSize(R.dimen.usb_album_art_size)
-        val verticalSpacing = (albumArtSize * 0.2f).roundToInt().coerceAtLeast(1)
-        val horizontalSpacing = resources.getDimensionPixelSize(R.dimen.usb_table_horizontal_spacing)
-        val halfHorizontalSpacing = (horizontalSpacing / 2f).roundToInt().coerceAtLeast(0)
-        val accentColor = ContextCompat.getColor(this, R.color.colorAccent)
-        val selectableBackground = selectableItemBackgroundRes()
-
-        applyHorizontalSpacingToHeader(table, halfHorizontalSpacing)
-        for (summary in folders) {
-            val row = TableRow(this).apply {
-                isClickable = true
-                isFocusable = true
-                setBackgroundResource(selectableBackground)
-                setOnClickListener { launchWriteActivity(summary.name) }
-            }
-            val artView = ImageView(this).apply {
-                layoutParams = TableRow.LayoutParams(albumArtSize, albumArtSize).apply {
-                    setMargins(halfHorizontalSpacing, 0, halfHorizontalSpacing, 0)
-                }
-                adjustViewBounds = true
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                val artBytes = summary.albumArt
-                if (artBytes != null) {
-                    BitmapFactory.decodeByteArray(artBytes, 0, artBytes.size)?.let { bitmap ->
-                        setImageBitmap(bitmap)
-                    }
-                }
-            }
-            val nameView = TextView(this).apply {
-                text = summary.name
-                layoutParams = TableRow.LayoutParams(
-                    TableRow.LayoutParams.WRAP_CONTENT,
-                    TableRow.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins(halfHorizontalSpacing, 0, halfHorizontalSpacing, 0) }
-            }
-            val artistView = TextView(this).apply {
-                text = summary.artist ?: getString(R.string.usb_list_unknown_artist)
-                layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    setMargins(halfHorizontalSpacing, 0, halfHorizontalSpacing, 0)
-                }
-            }
-            val albumView = TextView(this).apply {
-                text = summary.album ?: getString(R.string.usb_list_unknown_album)
-                layoutParams = TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    setMargins(halfHorizontalSpacing, 0, halfHorizontalSpacing, 0)
-                }
-            }
-            val chevronView = ImageView(this).apply {
-                setImageResource(R.drawable.ic_chevron_right_24)
-                ImageViewCompat.setImageTintList(this, ColorStateList.valueOf(accentColor))
-                layoutParams = TableRow.LayoutParams(
-                    TableRow.LayoutParams.WRAP_CONTENT,
-                    TableRow.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins(halfHorizontalSpacing, 0, halfHorizontalSpacing, 0) }
-                contentDescription = getString(R.string.usb_list_row_action_hint)
-            }
-            row.addView(nameView)
-            row.addView(artView)
-            row.addView(artistView)
-            row.addView(albumView)
-            row.addView(chevronView)
-
-            val rowLayoutParams = TableLayout.LayoutParams(
-                TableLayout.LayoutParams.MATCH_PARENT,
-                TableLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, verticalSpacing, 0, verticalSpacing)
-            }
-            table.addView(row, rowLayoutParams)
-        }
-    }
-
-    private fun applyHorizontalSpacingToHeader(table: TableLayout, halfSpacing: Int) {
-        val headerRow = table.getChildAt(0) as? TableRow ?: return
-        for (i in 0 until headerRow.childCount) {
-            val child = headerRow.getChildAt(i)
-            val existingParams = child.layoutParams
-            val params = if (existingParams is TableRow.LayoutParams) {
-                existingParams
-            } else {
-                TableRow.LayoutParams(existingParams)
-            }
-            params.setMargins(halfSpacing, params.topMargin, halfSpacing, params.bottomMargin)
-            child.layoutParams = params
-        }
-    }
-
-    private fun selectableItemBackgroundRes(): Int {
-        val outValue = TypedValue()
-        theme.resolveAttribute(android.R.attr.selectableItemBackground, outValue, true)
-        return outValue.resourceId
-    }
-
     private fun launchWriteActivity(folderName: String) {
         val folderNumber = parseSelectableFolderNumber(folderName) ?: return
         val tagData = TagData().apply { setFolder(folderNumber.toUByte()) }
@@ -199,7 +101,7 @@ class UsbFileListActivity : AppCompatActivity() {
     private fun scanFoldersAsync(
         root: DocumentFile,
         uri: Uri,
-        table: TableLayout,
+        listView: ListView,
         statusView: TextView
     ) {
         showProgressDialog()
@@ -217,23 +119,72 @@ class UsbFileListActivity : AppCompatActivity() {
             mainHandler.post {
                 if (isFinishing || isDestroyed) return@post
                 dismissProgressDialog()
-                showFolderSummaries(statusView, table, summaries)
+                showFolderSummaries(statusView, listView, summaries)
             }
         }
     }
 
     private fun showFolderSummaries(
         statusView: TextView,
-        table: TableLayout,
+        listView: ListView,
         folders: List<FolderSummary>
     ) {
         if (folders.isEmpty()) {
             statusView.text = getString(R.string.usb_list_no_folders)
-            table.visibility = View.GONE
+            listView.visibility = View.GONE
         } else {
             statusView.visibility = View.GONE
-            table.visibility = View.VISIBLE
-            populateTable(table, folders)
+            listView.visibility = View.VISIBLE
+            listView.adapter = FolderListAdapter(folders)
+            listView.setOnItemClickListener { _, _, position, _ ->
+                if (position in folders.indices) {
+                    launchWriteActivity(folders[position].name)
+                }
+            }
+        }
+    }
+
+    private inner class FolderListAdapter(private val items: List<FolderSummary>) : BaseAdapter() {
+        private val inflater: LayoutInflater = layoutInflater
+        private val accentColor: Int = ContextCompat.getColor(this@UsbFileListActivity, R.color.colorAccent)
+
+        override fun getCount(): Int = items.size
+
+        override fun getItem(position: Int): FolderSummary = items[position]
+
+        override fun getItemId(position: Int): Long = position.toLong()
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = convertView ?: inflater.inflate(R.layout.list_item_usb_folder, parent, false)
+            val artView = view.findViewById<ImageView>(R.id.usb_folder_album_art)
+            val titleView = view.findViewById<TextView>(R.id.usb_folder_title)
+            val artistView = view.findViewById<TextView>(R.id.usb_folder_artist)
+            val chevronView = view.findViewById<ImageView>(R.id.usb_folder_chevron)
+
+            val item = getItem(position)
+            val albumText = item.album ?: getString(R.string.usb_list_unknown_album)
+            val artistText = item.artist ?: getString(R.string.usb_list_unknown_artist)
+
+            titleView.text = getString(R.string.usb_folder_title_format, item.name, albumText)
+            artistView.text = artistText
+
+            val artBytes = item.albumArt
+            if (artBytes != null) {
+                val bitmap = BitmapFactory.decodeByteArray(artBytes, 0, artBytes.size)
+                if (bitmap != null) {
+                    artView.setImageBitmap(bitmap)
+                } else {
+                    artView.setImageDrawable(null)
+                }
+            } else {
+                artView.setImageDrawable(null)
+            }
+
+            chevronView?.let {
+                ImageViewCompat.setImageTintList(it, ColorStateList.valueOf(accentColor))
+            }
+
+            return view
         }
     }
 

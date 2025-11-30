@@ -9,4 +9,6 @@
     <dimen name="appbar_padding_top">8dp</dimen>
     <dimen name="usb_album_art_size">48dp</dimen>
     <dimen name="usb_table_horizontal_spacing">10dp</dimen>
+    <dimen name="usb_list_item_vertical_padding">10dp</dimen>
+    <dimen name="usb_list_divider_height">8dp</dimen>
 </resources>

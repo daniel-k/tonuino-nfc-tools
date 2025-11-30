@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:minHeight="@dimen/usb_album_art_size"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/usb_table_horizontal_spacing"
+    android:paddingEnd="@dimen/usb_table_horizontal_spacing"
+    android:paddingTop="@dimen/usb_list_item_vertical_padding"
+    android:paddingBottom="@dimen/usb_list_item_vertical_padding">
+
+    <ImageView
+        android:id="@+id/usb_folder_album_art"
+        android:layout_width="@dimen/usb_album_art_size"
+        android:layout_height="@dimen/usb_album_art_size"
+        android:layout_marginEnd="@dimen/usb_table_horizontal_spacing"
+        android:adjustViewBounds="true"
+        android:contentDescription="@string/usb_list_header_album_art"
+        android:scaleType="centerCrop" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/usb_folder_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?attr/textAppearanceListItem"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/usb_folder_artist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:textColor="?android:textColorSecondary" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/usb_folder_chevron"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/usb_table_horizontal_spacing"
+        android:contentDescription="@string/usb_list_row_action_hint"
+        android:src="@drawable/ic_chevron_right_24" />
+
+</LinearLayout>

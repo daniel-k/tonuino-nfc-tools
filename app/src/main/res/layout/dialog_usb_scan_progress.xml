@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="@dimen/margin_default">
+
+    <TextView
+        android:id="@+id/usb_scan_progress_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/usb_scan_preparing" />
+
+    <ProgressBar
+        android:id="@+id/usb_scan_progress_bar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:indeterminate="true" />
+
+</LinearLayout>

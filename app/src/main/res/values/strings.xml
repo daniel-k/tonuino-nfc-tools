@@ -48,6 +48,7 @@
     <string name="usb_folder_unknown_name">(unnamed folder)</string>
     <string name="usb_list_unknown_artist">(unknown artist)</string>
     <string name="usb_list_unknown_album">(unknown album)</string>
+    <string name="usb_folder_title_format">%1$s: %2$s</string>
     <string name="usb_scan_dialog_title">Scanning files</string>
     <string name="usb_scan_preparing">Preparing scan...</string>
     <string name="usb_scan_progress">%1$d / %2$d files processed</string>
