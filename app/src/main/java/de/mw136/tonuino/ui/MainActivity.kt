@@ -155,12 +155,9 @@ class MainActivity : NfcIntentActivity() {
         val storageManager = getSystemService(StorageManager::class.java)
         usedDocumentTreeFallback = false
 
-        val removableIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            val targetVolume = overrideVolume ?: storageManager?.storageVolumes?.firstOrNull { it.isRemovable }
-            targetVolume?.createAccessIntent(null)
-        } else {
-            null
-        }?.let { withCommonFlags(it) }
+        val removableIntent = buildVolumeRootPickerIntent(
+            overrideVolume ?: storageManager?.storageVolumes?.firstOrNull { it.isRemovable }
+        )
 
         if (removableIntent != null) {
             usbStoragePicker.launch(removableIntent)
@@ -328,15 +325,31 @@ class MainActivity : NfcIntentActivity() {
 
     private fun launchPickerForVolume(volume: StorageVolume) {
         usedDocumentTreeFallback = false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            val intent = volume.createAccessIntent(null)?.let { withCommonFlags(it) }
-            if (intent != null) {
-                usbStoragePicker.launch(intent)
-                return
+        val intent = buildVolumeRootPickerIntent(volume)
+        if (intent != null) {
+            usbStoragePicker.launch(intent)
+        } else {
+            usbStoragePicker.launch(buildDocumentTreeIntent())
+        }
+    }
+
+    private fun buildVolumeRootPickerIntent(volume: StorageVolume?): Intent? {
+        if (volume == null) return null
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val intent = volume.createOpenDocumentTreeIntent() ?: return null
+            val initialUri = intent.getParcelableExtra<Uri>(DocumentsContract.EXTRA_INITIAL_URI)
+            if (initialUri != null) {
+                intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUri)
             }
+            return withCommonFlags(intent)
         }
 
-        usbStoragePicker.launch(buildDocumentTreeIntent())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            return volume.createAccessIntent(null)?.let { withCommonFlags(it) }
+        }
+
+        return null
     }
 
     private fun registerReceiverCompat(
