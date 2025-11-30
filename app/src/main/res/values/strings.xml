@@ -37,8 +37,12 @@
     <string name="usb_list_error">Could not open the selected storage.</string>
     <string name="usb_list_header_folder">Folder</string>
     <string name="usb_list_header_files">Files</string>
+    <string name="usb_list_header_artist">Artist</string>
+    <string name="usb_list_header_album">Album</string>
     <string name="usb_list_no_folders">No folders found on the selected drive.</string>
     <string name="usb_folder_unknown_name">(unnamed folder)</string>
+    <string name="usb_list_unknown_artist">(unknown artist)</string>
+    <string name="usb_list_unknown_album">(unknown album)</string>
 
 
     <!-- Strings used on EditActivity -->

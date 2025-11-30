@@ -18,7 +18,7 @@
             android:id="@+id/usb_file_table"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:stretchColumns="1">
+            android:stretchColumns="*">
 
             <TableRow>
                 <TextView
@@ -33,6 +33,18 @@
                     android:layout_weight="1"
                     android:text="@string/usb_list_header_files"
                     android:textAlignment="textEnd"
+                    android:textStyle="bold" />
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/usb_list_header_artist"
+                    android:textStyle="bold" />
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/usb_list_header_album"
                     android:textStyle="bold" />
             </TableRow>
 
