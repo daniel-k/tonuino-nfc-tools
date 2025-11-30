@@ -96,8 +96,8 @@ class UsbFileListActivity : AppCompatActivity() {
         val modeValue = if (summary.albumDominant) {
             Format1Mode.AudioBookMultiple.value
         } else {
-            // For mixed albums fall back to simple album playback.
-            Format1Mode.Album.value
+            // For mixed albums fall back to Party playback.
+            Format1Mode.Party.value
         }
         val tagData = TagData().apply {
             setFolder(folderNumber.toUByte())
