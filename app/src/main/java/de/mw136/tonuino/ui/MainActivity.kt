@@ -23,6 +23,8 @@ import de.mw136.tonuino.ui.enter.TagData
 class MainActivity : NfcIntentActivity() {
     override val TAG = "MainActivity"
 
+    private var usedDocumentTreeFallback = false
+
     private val usbStoragePicker =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             handleUsbStorageResult(result)
@@ -71,12 +73,13 @@ class MainActivity : NfcIntentActivity() {
     fun listUsbFiles(@Suppress("UNUSED_PARAMETER") view: View) {
         val statusView = findViewById<TextView>(R.id.usb_result_text)
         val storageManager = getSystemService(StorageManager::class.java)
+        usedDocumentTreeFallback = false
 
         val removableIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             storageManager?.storageVolumes?.firstOrNull { it.isRemovable }?.createAccessIntent(null)
         } else {
             null
-        }
+        }?.let { withCommonFlags(it) }
 
         if (removableIntent != null) {
             usbStoragePicker.launch(removableIntent)
@@ -84,26 +87,52 @@ class MainActivity : NfcIntentActivity() {
         }
 
         statusView.text = getString(R.string.main_usb_not_found)
-        usbStoragePicker.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE))
+        usedDocumentTreeFallback = true
+        usbStoragePicker.launch(buildDocumentTreeIntent())
     }
 
     private fun handleUsbStorageResult(result: ActivityResult) {
         val statusView = findViewById<TextView>(R.id.usb_result_text)
-
-        if (result.resultCode != Activity.RESULT_OK) {
-            statusView.text = getString(R.string.main_usb_picker_cancelled)
-            return
-        }
-
         val resultData = result.data
         val uri = resultData?.data
-        if (uri == null) {
-            statusView.text = getString(R.string.main_usb_missing_uri)
+
+        if (result.resultCode != Activity.RESULT_OK || uri == null) {
+            if (!usedDocumentTreeFallback) {
+                statusView.text = getString(R.string.main_usb_not_found)
+                usedDocumentTreeFallback = true
+                usbStoragePicker.launch(buildDocumentTreeIntent())
+                return
+            }
+
+            if (uri == null) {
+                statusView.text = getString(R.string.main_usb_picker_cancelled)
+            } else {
+                proceedWithUsbUri(uri, statusView)
+            }
             return
         }
 
+        proceedWithUsbUri(uri, statusView)
+    }
+
+    private fun listFilesRecursively(node: DocumentFile, prefix: String = ""): List<String> {
+        val collected = mutableListOf<String>()
+        for (child in node.listFiles()) {
+            val name = child.name ?: "(unnamed)"
+            val path = if (prefix.isEmpty()) name else "$prefix/$name"
+            if (child.isDirectory) {
+                collected.add("$path/")
+                collected.addAll(listFilesRecursively(child, path))
+            } else {
+                collected.add(path)
+            }
+        }
+        return collected
+    }
+
+    private fun proceedWithUsbUri(uri: android.net.Uri, statusView: TextView) {
         val takeFlags =
-            (resultData.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION))
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
         try {
             contentResolver.takePersistableUriPermission(uri, takeFlags)
         } catch (e: SecurityException) {
@@ -131,19 +160,14 @@ class MainActivity : NfcIntentActivity() {
         Log.i(TAG, "Files on USB drive:\n$message")
     }
 
-    private fun listFilesRecursively(node: DocumentFile, prefix: String = ""): List<String> {
-        val collected = mutableListOf<String>()
-        for (child in node.listFiles()) {
-            val name = child.name ?: "(unnamed)"
-            val path = if (prefix.isEmpty()) name else "$prefix/$name"
-            if (child.isDirectory) {
-                collected.add("$path/")
-                collected.addAll(listFilesRecursively(child, path))
-            } else {
-                collected.add(path)
-            }
-        }
-        return collected
+    private fun buildDocumentTreeIntent(): Intent =
+        withCommonFlags(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE))
+
+    private fun withCommonFlags(intent: Intent): Intent = intent.apply {
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
     }
 
     fun showWriteActivity(view: View) {
