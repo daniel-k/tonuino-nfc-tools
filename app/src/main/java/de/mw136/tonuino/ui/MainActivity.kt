@@ -20,6 +20,7 @@ import android.os.storage.StorageVolume
 import android.provider.DocumentsContract
 import android.util.Log
 import android.view.View
+import android.widget.Button
 import android.widget.TextView
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -127,6 +128,8 @@ class MainActivity : NfcIntentActivity() {
         if (BuildConfig.DEBUG) {
             enabledContainer.visibility = View.VISIBLE
         }
+
+        updateUsbListButtonState()
     }
 
     fun listUsbFiles(@Suppress("UNUSED_PARAMETER") view: View) {
@@ -139,7 +142,9 @@ class MainActivity : NfcIntentActivity() {
 
     private fun startUsbFlow(usePersistedUri: Boolean, overrideVolume: StorageVolume? = null) {
         val statusView = findViewById<TextView>(R.id.usb_result_text)
+        usedDocumentTreeFallback = false
 
+        val hadSavedUri = usbPermissionStore.hasSavedUri()
         val persistedUri =
             if (usePersistedUri) usbPermissionStore.getPersistedUriIfReadable(contentResolver) else null
         if (usePersistedUri) {
@@ -147,13 +152,22 @@ class MainActivity : NfcIntentActivity() {
                 statusView.text = getString(R.string.main_usb_using_saved_access)
                 proceedWithUsbUri(persistedUri, statusView, rememberSelection = false)
                 return
-            } else if (usbPermissionStore.hasSavedUri()) {
+            }
+
+            if (overrideVolume == null) {
+                statusView.text = if (hadSavedUri) {
+                    getString(R.string.main_usb_saved_access_invalid)
+                } else {
+                    getString(R.string.main_usb_no_saved_location)
+                }
+                updateUsbListButtonState()
+                return
+            } else if (hadSavedUri) {
                 statusView.text = getString(R.string.main_usb_saved_access_invalid)
             }
         }
 
         val storageManager = getSystemService(StorageManager::class.java)
-        usedDocumentTreeFallback = false
 
         val removableIntent = buildVolumeRootPickerIntent(
             overrideVolume ?: storageManager?.storageVolumes?.firstOrNull { it.isRemovable }
@@ -209,9 +223,11 @@ class MainActivity : NfcIntentActivity() {
         if (root == null || !root.canRead()) {
             statusView.text = getString(R.string.main_usb_open_failed)
             usbPermissionStore.clear()
+            updateUsbListButtonState()
             return
         }
 
+        updateUsbListButtonState()
         statusView.text = getString(R.string.usb_list_loading)
         Log.i(TAG, "Opening USB file list for uri=$uri")
         startActivity(Intent(this, UsbFileListActivity::class.java).apply {
@@ -227,6 +243,26 @@ class MainActivity : NfcIntentActivity() {
         addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+    }
+
+    private fun updateUsbListButtonState() {
+        val usbListButton = findViewById<Button>(R.id.usb_list_button)
+        val statusView = findViewById<TextView>(R.id.usb_result_text)
+        val hadSavedUri = usbPermissionStore.hasSavedUri()
+        val persistedUri = usbPermissionStore.getPersistedUriIfReadable(contentResolver)
+        val enabled = persistedUri != null
+
+        usbListButton.isEnabled = enabled
+        usbListButton.alpha = if (enabled) 1f else 0.5f
+
+        if (!enabled && statusView.text.isNullOrBlank()) {
+            val message = if (hadSavedUri) {
+                getString(R.string.main_usb_saved_access_invalid)
+            } else {
+                getString(R.string.main_usb_no_saved_location)
+            }
+            statusView.text = message
+        }
     }
 
     fun showWriteActivity(view: View) {

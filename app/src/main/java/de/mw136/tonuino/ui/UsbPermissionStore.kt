@@ -33,8 +33,7 @@ class UsbPermissionStore(private val context: Context) {
 
         val doc = DocumentFile.fromTreeUri(context, uri)
         if (doc == null || !doc.canRead()) {
-            Log.i(TAG, "Saved USB location $uri is not readable anymore; clearing saved URI")
-            clear()
+            Log.i(TAG, "Saved USB location $uri is not readable right now")
             return null
         }
 
